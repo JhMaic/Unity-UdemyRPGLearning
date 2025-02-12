@@ -4,17 +4,30 @@ using System.Collections.Generic;
 [Serializable]
 public class ItemSlot
 {
+    private int _count;
+
     private ItemSlot()
     {
     }
 
-    public int Count { get; private set; }
+    public int Count
+    {
+        get => _count;
+        private set
+        {
+            _count = value;
+            CountChanged?.Invoke(value);
+        }
+    }
 
     public ItemData Item { get; private set; }
 
     public bool IsFull => Count.Equals(Item.stackMaxCount);
 
     public int RemainingCount => Item.stackMaxCount - Count;
+
+
+    public event Action<int> CountChanged;
 
 
     public static ItemSlot CreateOne(ItemData item)

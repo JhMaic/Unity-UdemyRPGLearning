@@ -1,19 +1,18 @@
-using CustomInspector;
 using UnityEngine;
 
 public class ItemObject : MonoBehaviour
 {
     [SerializeField] private ItemData itemData;
-    [SerializeField] [SelfFill(true)] private SpriteRenderer sr;
-
-    private void Awake()
-    {
-        sr.sprite = itemData.icon;
-    }
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        Inventory.Instance.AutoFill(itemData, 13);
+        Inventory.Instance.AutoFill(itemData);
         Destroy(gameObject);
+    }
+
+    private void OnValidate()
+    {
+        GetComponent<SpriteRenderer>().sprite = itemData.icon;
+        gameObject.name = $"Item object - {itemData.itemName}";
     }
 }

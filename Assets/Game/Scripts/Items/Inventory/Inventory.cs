@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -6,15 +7,14 @@ public class Inventory : MonoBehaviour
 {
     public static Inventory Instance;
 
-    private List<int> _emptySlotIdxes;
-    private List<ItemSlot> _itemSlots;
+    public List<int> EmptySlotIdxes { get; private set; }
+    public List<ItemSlot> ItemSlots { get; private set; }
 
     /// <summary>
     ///     key: key of the item
     ///     value: slot index of the item
     /// </summary>
-    private Dictionary<string, List<int>>　_slotIdxes;
-
+    public Dictionary<string, List<int>> SlotIdxes { get; private set; }
 
     private void Awake()
     {
@@ -23,24 +23,31 @@ public class Inventory : MonoBehaviour
 
         Instance = this;
 
-        _itemSlots = new List<ItemSlot>();
-        _slotIdxes = new Dictionary<string, List<int>>();
-        _emptySlotIdxes = new List<int>();
+        ItemSlots = new List<ItemSlot>();
+        SlotIdxes = new Dictionary<string, List<int>>();
+        EmptySlotIdxes = new List<int>();
     }
+
+    /// <summary>
+    ///     create/remove/update
+    ///     slot_idx
+    /// </summary>
+    public event Action<int> SlotChanged;
+
 
     private bool TryGetEmptySlotIdx(out int idx)
     {
         idx = 0;
-        if (_emptySlotIdxes.Count == 0)
+        if (EmptySlotIdxes.Count == 0)
             return false;
 
-        idx = _emptySlotIdxes.Min();
+        idx = EmptySlotIdxes.Min();
         return true;
     }
 
     private void AddItem(ItemData item, int count = 1)
     {
-        if (!_slotIdxes.ContainsKey(item.itemName))
+        if (!SlotIdxes.ContainsKey(item.itemName))
         {
             var slots = ItemSlot.CreateMany(item, count);
             AddToSlots(slots);
@@ -50,17 +57,17 @@ public class Inventory : MonoBehaviour
     public void AutoFill(ItemData item, int count = 1)
     {
         // if item is already has slots in inventory, check if it's fulfilled
-        if (_slotIdxes.TryGetValue(item.itemName, out var idxes))
+        if (SlotIdxes.TryGetValue(item.itemName, out var idxes))
         {
             var restCount = count;
 
 
             foreach (var idx in idxes)
             {
-                if (_itemSlots[idx].IsFull)
+                if (ItemSlots[idx].IsFull)
                     continue;
 
-                restCount = _itemSlots[idx].FillUp(restCount);
+                restCount = ItemSlots[idx].FillUp(restCount);
 
                 if (restCount == 0)
                     break;
@@ -85,33 +92,16 @@ public class Inventory : MonoBehaviour
 
     private void UpdateSlotIdxes(string keyName, int idx)
     {
-        if (_slotIdxes.TryGetValue(keyName, out var value))
+        if (SlotIdxes.TryGetValue(keyName, out var value))
         {
             value.Add(idx);
             value.Sort();
             return;
         }
 
-        _slotIdxes.Add(keyName, new List<int> { idx });
+        SlotIdxes.Add(keyName, new List<int> { idx });
     }
 
-    private void AddToSlots(ItemSlot itemSlot)
-    {
-        var hasEmptySlot = TryGetEmptySlotIdx(out var emptySlotIdx);
-
-        if (!hasEmptySlot)
-        {
-            _itemSlots.Add(itemSlot);
-            var idx = _itemSlots.Count - 1;
-            UpdateSlotIdxes(itemSlot.Item.itemName, idx);
-        }
-        else
-        {
-            _itemSlots[emptySlotIdx] = itemSlot;
-            _emptySlotIdxes.Remove(emptySlotIdx);
-            UpdateSlotIdxes(itemSlot.Item.itemName, emptySlotIdx);
-        }
-    }
 
     private void AddToSlots(List<ItemSlot> itemSlots)
     {
@@ -120,7 +110,7 @@ public class Inventory : MonoBehaviour
 
     public void ConsumeItem(int slotIdx)
     {
-        var slot = _itemSlots[slotIdx];
+        var slot = ItemSlots[slotIdx];
         if (slot is null)
             return;
 
@@ -132,18 +122,18 @@ public class Inventory : MonoBehaviour
 
     public bool TryConsumeItems(string keyName, int count)
     {
-        var hasItem = _slotIdxes.TryGetValue(keyName, out var idxes);
+        var hasItem = SlotIdxes.TryGetValue(keyName, out var idxes);
         if (!hasItem)
             return false;
 
-        var totalCount = idxes.Select(idx => _itemSlots[idx].Count).Sum();
+        var totalCount = idxes.Select(idx => ItemSlots[idx].Count).Sum();
         if (totalCount < count)
             return false;
 
         var restCount = count;
         foreach (var idx in idxes.ToList())
         {
-            var slot = _itemSlots[idx];
+            var slot = ItemSlots[idx];
             if (restCount >= slot.Count)
             {
                 restCount -= slot.Count;
@@ -162,14 +152,43 @@ public class Inventory : MonoBehaviour
         return true;
     }
 
+
+    private void AddToSlots(ItemSlot itemSlot)
+    {
+        int idx;
+        if (TryGetEmptySlotIdx(out var emptySlotIdx))
+        {
+            idx = emptySlotIdx;
+            ItemSlots[idx] = itemSlot;
+            EmptySlotIdxes.Remove(idx);
+            UpdateSlotIdxes(itemSlot.Item.itemName, idx);
+        }
+        else
+        {
+            ItemSlots.Add(itemSlot);
+            idx = ItemSlots.Count - 1;
+            UpdateSlotIdxes(itemSlot.Item.itemName, idx);
+        }
+
+        SlotChanged?.Invoke(idx);
+        itemSlot.CountChanged += HandleItemCountChanged(idx);
+    }
+
     private void RemoveSlot(int slotIdx)
     {
-        if (_itemSlots[slotIdx] is null)
+        if (ItemSlots[slotIdx] is null)
             return;
 
-        var itemKey = _itemSlots[slotIdx].Item.itemName;
-        _emptySlotIdxes.Add(slotIdx);
-        _slotIdxes.GetValueOrDefault(itemKey).Remove(slotIdx);
-        _itemSlots[slotIdx] = null;
+        var itemKey = ItemSlots[slotIdx].Item.itemName;
+        EmptySlotIdxes.Add(slotIdx);
+        SlotIdxes.GetValueOrDefault(itemKey).Remove(slotIdx);
+        ItemSlots[slotIdx].CountChanged -= HandleItemCountChanged(slotIdx);
+        ItemSlots[slotIdx] = null;
+        SlotChanged?.Invoke(slotIdx);
+    }
+
+    private Action<int> HandleItemCountChanged(int slotIdx)
+    {
+        return count => SlotChanged?.Invoke(slotIdx);
     }
 }
