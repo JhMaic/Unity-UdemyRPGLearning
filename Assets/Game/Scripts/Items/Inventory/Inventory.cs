@@ -108,6 +108,10 @@ public class Inventory : MonoBehaviour
         itemSlots.ForEach(AddToSlots);
     }
 
+    /// <summary>
+    ///     consume one item by slot idx
+    /// </summary>
+    /// <param name="slotIdx"></param>
     public void ConsumeItem(int slotIdx)
     {
         var slot = ItemSlots[slotIdx];
@@ -120,6 +124,12 @@ public class Inventory : MonoBehaviour
             RemoveSlot(slotIdx);
     }
 
+    /// <summary>
+    ///     consume many items by name
+    /// </summary>
+    /// <param name="keyName"> item name </param>
+    /// <param name="count"> how many to consume </param>
+    /// <returns></returns>
     public bool TryConsumeItems(string keyName, int count)
     {
         var hasItem = SlotIdxes.TryGetValue(keyName, out var idxes);

@@ -2,7 +2,7 @@ using R3;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class Character_UI : MonoBehaviour
+public class UI_Character : MonoBehaviour
 {
     [SerializeField] private CharacterStatAgent statAgent;
     [SerializeField] private Slider healthBar;
