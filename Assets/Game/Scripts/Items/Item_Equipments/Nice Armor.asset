@@ -15,4 +15,4 @@ MonoBehaviour:
   itemName: Nice Armor
   icon: {fileID: 1667790894, guid: a9ca9a41598dd2e44b125928045c518f, type: 3}
   stackMaxCount: 1
-  equipmentType: 0
+  equipmentType: 1

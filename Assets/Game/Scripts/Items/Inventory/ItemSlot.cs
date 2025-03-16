@@ -55,6 +55,28 @@ public class ItemSlot
         return new List<ItemSlot> { i };
     }
 
+    public static ItemSlot Clone(ItemSlot from)
+    {
+        return new ItemSlot
+        {
+            Item = from.Item,
+            Count = from.Count
+        };
+    }
+
+
+    public ItemSlot Break(int count)
+    {
+        if (count > Count)
+            count = Count;
+
+        Count -= count;
+        return new ItemSlot
+        {
+            Item = Item,
+            Count = count
+        };
+    }
 
     /// <summary>
     /// </summary>

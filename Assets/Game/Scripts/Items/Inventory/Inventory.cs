@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using JetBrains.Annotations;
 using UnityEngine;
 
 public class Inventory : MonoBehaviour
 {
     public static Inventory Instance;
+
+    [SerializeField]
+    public int maxSlotCount = 64;
 
     public List<int> EmptySlotIdxes { get; private set; }
     public List<ItemSlot> ItemSlots { get; private set; }
@@ -16,6 +20,9 @@ public class Inventory : MonoBehaviour
     /// </summary>
     public Dictionary<string, List<int>> SlotIdxes { get; private set; }
 
+    [CanBeNull] public ItemSlot MouseSlot { get; set; }
+
+
     private void Awake()
     {
         if (Instance != null)
@@ -23,9 +30,10 @@ public class Inventory : MonoBehaviour
 
         Instance = this;
 
-        ItemSlots = new List<ItemSlot>();
+        ItemSlots = Enumerable.Repeat<ItemSlot>(null, maxSlotCount).ToList();
         SlotIdxes = new Dictionary<string, List<int>>();
-        EmptySlotIdxes = new List<int>();
+        EmptySlotIdxes = Enumerable.Range(0, maxSlotCount).ToList();
+        MouseSlot = null;
     }
 
     /// <summary>
@@ -34,26 +42,11 @@ public class Inventory : MonoBehaviour
     /// </summary>
     public event Action<int> SlotChanged;
 
-
-    private bool TryGetEmptySlotIdx(out int idx)
-    {
-        idx = 0;
-        if (EmptySlotIdxes.Count == 0)
-            return false;
-
-        idx = EmptySlotIdxes.Min();
-        return true;
-    }
-
-    private void AddItem(ItemData item, int count = 1)
-    {
-        if (!SlotIdxes.ContainsKey(item.itemName))
-        {
-            var slots = ItemSlot.CreateMany(item, count);
-            AddToSlots(slots);
-        }
-    }
-
+    /// <summary>
+    ///     place items automatically, e.g, picking up;
+    /// </summary>
+    /// <param name="item"></param>
+    /// <param name="count"></param>
     public void AutoFill(ItemData item, int count = 1)
     {
         // if item is already has slots in inventory, check if it's fulfilled
@@ -89,39 +82,34 @@ public class Inventory : MonoBehaviour
         }
     }
 
-
-    private void UpdateSlotIdxes(string keyName, int idx)
-    {
-        if (SlotIdxes.TryGetValue(keyName, out var value))
-        {
-            value.Add(idx);
-            value.Sort();
-            return;
-        }
-
-        SlotIdxes.Add(keyName, new List<int> { idx });
-    }
-
-
-    private void AddToSlots(List<ItemSlot> itemSlots)
-    {
-        itemSlots.ForEach(AddToSlots);
-    }
-
     /// <summary>
-    ///     consume one item by slot idx
+    ///     consume some items by slot idx
     /// </summary>
     /// <param name="slotIdx"></param>
-    public void ConsumeItem(int slotIdx)
+    /// <param name="count"></param>
+    public void ConsumeItem(int slotIdx, int count = 1)
     {
         var slot = ItemSlots[slotIdx];
         if (slot is null)
             return;
 
-        var restCount = slot.RemoveOne();
+        if (slot.TryRemoveSome(count))
+            if (slot.Count.Equals(0))
+                RemoveSlot(slotIdx);
+    }
 
-        if (restCount == 0)
-            RemoveSlot(slotIdx);
+    /// <summary>
+    ///     consume all item by slot idx
+    /// </summary>
+    /// <param name="slotIdx"></param>
+    public void ConsumeAllItems(int slotIdx)
+    {
+        var slot = ItemSlots[slotIdx];
+        if (slot is null)
+            return;
+
+        slot.RemoveAll();
+        RemoveSlot(slotIdx);
     }
 
     /// <summary>
@@ -162,6 +150,76 @@ public class Inventory : MonoBehaviour
         return true;
     }
 
+    public void SwapPosition(int slotAIdx, int slotBIdx)
+    {
+        var slotA = ItemSlots[slotAIdx];
+        var slotB = ItemSlots[slotBIdx];
+
+        if (slotA is null)
+            return;
+
+        if (slotB is null)
+        {
+            AddToSlots(slotA, slotBIdx);
+            RemoveSlot(slotAIdx);
+        }
+        else
+        {
+            if (slotB.Item.itemName.Equals(slotA.Item.itemName))
+            {
+                // same items
+                var rest = slotB.FillUp(slotA.Count);
+                ConsumeItem(slotAIdx, slotA.Count - rest);
+            }
+            else
+            {
+                // different items
+                RemoveSlot(slotAIdx);
+                RemoveSlot(slotBIdx);
+                AddToSlots(slotB, slotAIdx);
+                AddToSlots(slotA, slotBIdx);
+            }
+        }
+    }
+
+    private bool TryGetEmptySlotIdx(out int idx)
+    {
+        idx = 0;
+        if (EmptySlotIdxes.Count == 0)
+            return false;
+
+        idx = EmptySlotIdxes.Min();
+        return true;
+    }
+
+    private void AddItem(ItemData item, int count = 1)
+    {
+        if (!SlotIdxes.ContainsKey(item.itemName))
+        {
+            var slots = ItemSlot.CreateMany(item, count);
+            AddToSlots(slots);
+        }
+    }
+
+
+    private void UpdateSlotIdxes(string keyName, int idx)
+    {
+        if (SlotIdxes.TryGetValue(keyName, out var value))
+        {
+            value.Add(idx);
+            value.Sort();
+            return;
+        }
+
+        SlotIdxes.Add(keyName, new List<int> { idx });
+    }
+
+
+    private void AddToSlots(List<ItemSlot> itemSlots)
+    {
+        itemSlots.ForEach(AddToSlots);
+    }
+
 
     private void AddToSlots(ItemSlot itemSlot)
     {
@@ -175,13 +233,24 @@ public class Inventory : MonoBehaviour
         }
         else
         {
-            ItemSlots.Add(itemSlot);
-            idx = ItemSlots.Count - 1;
-            UpdateSlotIdxes(itemSlot.Item.itemName, idx);
+            throw new Exception("No spare slot!");
         }
 
         SlotChanged?.Invoke(idx);
         itemSlot.CountChanged += HandleItemCountChanged(idx);
+    }
+
+    private void AddToSlots(ItemSlot itemSlot, int targetIdx)
+    {
+        if (ItemSlots[targetIdx] is not null)
+            return;
+
+        ItemSlots[targetIdx] = itemSlot;
+        EmptySlotIdxes.Remove(targetIdx);
+        UpdateSlotIdxes(itemSlot.Item.itemName, targetIdx);
+
+        SlotChanged?.Invoke(targetIdx);
+        itemSlot.CountChanged += HandleItemCountChanged(targetIdx);
     }
 
     private void RemoveSlot(int slotIdx)

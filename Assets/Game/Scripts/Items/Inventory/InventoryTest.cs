@@ -1,4 +1,5 @@
 using CustomInspector;
+using Nenn.InspectorEnhancements.Runtime.Attributes;
 using UnityEngine;
 
 public class InventoryTest : MonoBehaviour
@@ -21,5 +22,11 @@ public class InventoryTest : MonoBehaviour
     public void TestConsumeMany(int _count)
     {
         inventory.TryConsumeItems("Animal Skin", _count);
+    }
+
+    [MethodButton]
+    public void TestSwapSlot(int idx1, int idx2)
+    {
+        inventory.SwapPosition(idx1, idx2);
     }
 }
