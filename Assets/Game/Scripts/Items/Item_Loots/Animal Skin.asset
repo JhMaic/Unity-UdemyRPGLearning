@@ -14,4 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Animal Skin
   icon: {fileID: 21300000, guid: 1b99c1f5bba0c3f4ead81c79bd4ceb7c, type: 3}
-  stackMaxCount: 10
+  stackMaxCount: 16

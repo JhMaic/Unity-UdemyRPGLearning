@@ -1,4 +1,3 @@
-using System;
 using CustomInspector;
 using TMPro;
 using UnityEngine;
@@ -11,12 +10,13 @@ public class UI_ItemSlot : MonoBehaviour, IPointerDownHandler
 
     [SerializeField] [SelfFill(true, mode = OwnerMode.DirectChildren)]
     private TextMeshProUGUI itemText;
-    public ItemSlot item;
 
     private Color _defaultColor;
     private Sprite _defaultSprite;
+    private Slot _slot;
 
-    public int SlotIndex { get; set; }
+    private GameContext.RuntimeContext Runtime => GameContext.Instance.Runtime;
+
 
     private void Awake()
     {
@@ -24,14 +24,49 @@ public class UI_ItemSlot : MonoBehaviour, IPointerDownHandler
         _defaultSprite = itemImage.sprite;
     }
 
-    public void OnPointerDown(PointerEventData eventData)
+    private void OnDestroy()
     {
-        MouseDown?.Invoke(SlotIndex);
+        _slot.ChangeEvent -= OnSlotChanged;
     }
 
-    public event Action<int> MouseDown;
-    public event Action<int> MouseUp;
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        if (!Runtime.inventory.isMouseHolding)
+        {
+            if (_slot.Stat == Slot.Status.Empty)
+                return;
 
+            // not holding any slot
+            SetOpacity(0.5f);
+            Runtime.inventory = new GameContext.RuntimeContext.Inventory
+            {
+                isMouseHolding = true,
+                heldSlot = this
+            };
+        }
+        else
+        {
+            // is holding a slot
+            Slot.SwapItem(Runtime.inventory.heldSlot._slot, _slot);
+            Runtime.inventory = new GameContext.RuntimeContext.Inventory
+            {
+                isMouseHolding = false,
+                heldSlot = null
+            };
+        }
+    }
+
+
+    public void Init(Slot slot)
+    {
+        _slot = slot;
+        _slot.ChangeEvent += OnSlotChanged;
+    }
+
+    private void OnSlotChanged()
+    {
+        UpdateUI();
+    }
 
     public void SetDefault()
     {
@@ -43,30 +78,26 @@ public class UI_ItemSlot : MonoBehaviour, IPointerDownHandler
     /// </summary>
     /// <param name="alpha"></param>
     /// <returns> restore function </returns>
-    public Action SetOpacity(float alpha)
+    public void SetOpacity(float alpha)
     {
-        Action<float> setValue = value =>
+        void SetValue(float value)
         {
             var color = itemImage.color;
             color.a = value;
             itemImage.color = color;
-        };
-        ;
-        var oldValue = itemImage.color.a;
-        setValue(alpha);
+        }
 
-        return () => setValue(oldValue);
+        SetValue(alpha);
     }
 
 
-    public void UpdateUI(ItemSlot newItem)
+    public void UpdateUI()
     {
-        item = newItem;
-        if (item != null)
+        if (_slot.Item != null)
         {
             itemImage.color = Color.white;
-            itemImage.sprite = item.Item.icon;
-            itemText.text = item.Count > 1 ? item.Count.ToString() : "";
+            itemImage.sprite = _slot.Item.Item.icon;
+            itemText.text = _slot.Item.Count > 1 ? _slot.Item.Count.ToString() : "";
         }
         else
         {

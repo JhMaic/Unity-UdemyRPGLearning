@@ -6,7 +6,7 @@ public class ItemObject : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        Inventory.Instance.AutoFill(itemData);
+        InventoryV2.Instance.AutoFill(itemData);
         Destroy(gameObject);
     }
 
